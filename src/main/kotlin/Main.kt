@@ -101,7 +101,7 @@ fun runScript(
     modifyScriptRunning: (Boolean, Int?) -> Unit,
 ) {
     Thread {
-        val filename = "/home/sikora/IdeaProjects/KotlinEditor/script.kts"
+        val filename = "./foo.kts"
         File(filename).writeText(script);
         val process = ProcessBuilder(listOf("kotlinc", "-script", filename)).redirectErrorStream(false).start();
         modifyScriptRunning(true, null);

@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
 
 const val TAB_SPACE_AMOUNT = "    "; // 1 tab is 4 spaces
 val keywords: Map<String, Color> =
@@ -50,17 +53,16 @@ fun getColoredText(input: String): AnnotatedString {
 }
 
 @Composable
-fun HighlitableTextArea() {
-    val text = rememberSaveable { mutableStateOf(TextFieldValue("")) }
+fun HighlitableTextArea(text:TextFieldValue,changeText:(TextFieldValue)->Unit) {
     BasicTextField(
-        value = text.value,
+        value = text,
         onValueChange = {
             val modifiedText = it.text.replace("\t",TAB_SPACE_AMOUNT);
             var newCursor = it.selection.start;
             if(modifiedText.length >it.text.length) {
                 newCursor +=3;
             }
-            text.value = TextFieldValue(text=modifiedText, selection = TextRange(newCursor))
+            changeText(TextFieldValue(text=modifiedText, selection = TextRange(newCursor)))
         },
         textStyle = TextStyle(color = Color.Transparent, fontSize = 12.sp),
         modifier = Modifier
@@ -68,26 +70,42 @@ fun HighlitableTextArea() {
             .padding(16.dp),
         visualTransformation = {
             TransformedText(
-                getColoredText(text.value.text).subSequence(0, text.value.text.length),
+                getColoredText(text.text).subSequence(0, text.text.length),
                 OffsetMapping.Identity
             )
         }
     )
 }
 
-
+fun runScript(script:String){
+    val filename="/home/sikora/IdeaProjects/KotlinEditor/script.kts"
+    File(filename).writeText(script);
+    val process = ProcessBuilder(listOf("kotlinc" ,"-script",filename)  ).redirectErrorStream(true).start();
+    val inputStream = process.inputStream;
+    val reader = BufferedReader(InputStreamReader(inputStream));
+    Thread{
+        reader.forEachLine {
+            println(it)
+        }
+    }.start()
+    process.waitFor()
+}
 @Composable
 @Preview
 fun App() {
     MaterialTheme {
+        val scriptText = rememberSaveable { mutableStateOf(TextFieldValue("")) }
+
         Column {
             Row {
-
+                Button(onClick = { runScript(scriptText.value.text) }) {
+                    Text("Run Script")
+                }
             }
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxWidth(0.5f)) {
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        HighlitableTextArea();
+                        HighlitableTextArea(scriptText.value,changeText = {it->scriptText.value =it });
                     }
                 }
                 Column(modifier = Modifier.fillMaxWidth().background(Color.Black).fillMaxHeight()) {

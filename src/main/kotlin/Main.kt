@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -14,9 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,29 +68,28 @@ fun getColoredText(input: String): AnnotatedString {
 }
 
 @Composable
-fun HighlitableTextArea(text: String, changeText: (String) -> Unit) {
+fun HighlitableTextArea(text: TextFieldValue, changeText: (TextFieldValue) -> Unit) {
     RoundedCard(modifier = Modifier, bgColor = Color.White) {
         BasicTextField(
             value = text,
             onValueChange = { it ->
-                changeText(it)
-//            val modifiedText = it.text.replace("\t", TAB_SPACE_AMOUNT);
-//
-//            if (modifiedText.length > it.text.length) {
-//                var newCursor = it.selection.start;
-//                newCursor += 3;
-//                changeText(TextFieldValue(text = modifiedText, selection = TextRange(newCursor)))
-//            }
-//            else{
-//                changeText(TextFieldValue(text = modifiedText,selection=TextRange(modifiedText.length)))
-//            }
+                val modifiedText = it.text.replace("\t", TAB_SPACE_AMOUNT);
+
+                if (modifiedText.length > it.text.length) {
+                    println("Inserted tab")
+                    var newCursor = it.selection.start;
+                    newCursor += 3;
+                    changeText(TextFieldValue(text = modifiedText, selection = TextRange(newCursor)))
+                } else {
+                    changeText(TextFieldValue(text = modifiedText, selection = it.selection))
+                }
             },
             textStyle = TextStyle(color = Color.Black, fontSize = 12.sp),
             modifier = Modifier
                 .fillMaxWidth().height(500.dp).padding(8.dp),
             visualTransformation = {
                 TransformedText(
-                    getColoredText(text).subSequence(0, text.length),
+                    getColoredText(text.text).subSequence(0, text.text.length),
                     OffsetMapping.Identity
                 )
             },
@@ -143,16 +147,19 @@ fun App() {
     MaterialTheme {
         val scriptText = rememberSaveable {
             mutableStateOf(
-                "// This is a simple Kotlin script to test the process execution\n" +
-                        "println(\"Hello from the Kotlin script!\")\n" +
-                        "\n" +
-                        "// Simple computation\n" +
-                        "val result = 42 * 2\n" +
-                        "println(\"The result of 42 * 2 is: \$result\")\n" +
-                        "\n" +
-                        "// Simulate a delay (for testing live output)\n" +
-                        "Thread.sleep(1000)\n" +
-                        "println(\"This is printed after a 1-second delay.\")\n"
+                TextFieldValue(
+                    text =
+                        "// This is a simple Kotlin script to test the process execution\n" +
+                                "println(\"Hello from the Kotlin script!\")\n" +
+                                "\n" +
+                                "// Simple computation\n" +
+                                "val result = 42 * 2\n" +
+                                "println(\"The result of 42 * 2 is: \$result\")\n" +
+                                "\n" +
+                                "// Simulate a delay (for testing live output)\n" +
+                                "Thread.sleep(1000)\n" +
+                                "println(\"This is printed after a 1-second delay.\")\n"
+                )
             )
         }
         val outputText = rememberSaveable { mutableStateOf("") }
@@ -170,7 +177,7 @@ fun App() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(modifier = Modifier.height(40.dp).width(130.dp), onClick = {
                     runScript(
-                        scriptText.value,
+                        scriptText.value.text,
                         { output ->
                             annotatedTextBuilder.withStyle(SpanStyle(color = Color.Gray)) { append(output + "\n") }
                             textToShow = annotatedTextBuilder.toAnnotatedString()

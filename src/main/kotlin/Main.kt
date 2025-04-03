@@ -19,14 +19,17 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import jdk.internal.org.jline.utils.AttributedStringBuilder.append
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
@@ -183,7 +186,43 @@ fun App() {
                             textToShow = annotatedTextBuilder.toAnnotatedString()
                         },
                         { output ->
-                            annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(output + "\n") }
+                            val regex = """(.*?)([a-zA-Z0-9_-]+\.kts):(\d+):(\d+):(.+)""".toRegex()
+
+                            val matchResult = regex.find(output)
+                            if (matchResult != null) {
+                                println("Not null")
+                                matchResult?.let {
+                                    val beforeText = it.groupValues[1]  // "some other text before "
+                                    val filename = it.groupValues[2]   // "foo.kts"
+                                    val number1 = it.groupValues[3]    // "10"
+                                    val number2 = it.groupValues[4]    // "50"
+                                    val otherText = it.groupValues[5]  // "some extra information here"
+
+                                    println("Before Text: $beforeText")
+                                    println("Filename: $filename")
+                                    println("Number1: $number1")
+                                    println("Number2: $number2")
+                                    println("Other Text: $otherText")
+                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(beforeText) }
+                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(filename+":") }
+                                    annotatedTextBuilder.pushLink(LinkAnnotation.Clickable("clickable line") {
+                                        //TODO move the cursor
+                                        println("Clicked on $number1:$number2")
+                                    });
+
+                                    annotatedTextBuilder.withStyle(
+                                        SpanStyle(
+                                            color = Color.Red,
+                                            textDecoration = TextDecoration.Underline
+                                        )
+                                    ) { append("$number1:$number2: ") };
+                                    annotatedTextBuilder.pop()
+                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(otherText) }
+                                }
+                            } else {
+                                annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(output + "\n") }
+                            }
+
                             textToShow = annotatedTextBuilder.toAnnotatedString()
                         },
                         { running, code -> isScriptRunning.value = running;exitCode.value = code },
@@ -214,14 +253,19 @@ fun App() {
                 Column(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
                     Row(modifier = Modifier.fillMaxWidth()) {
 
-                        RoundedCard(modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(), bgColor = Color.Black) {
+                        RoundedCard(
+                            modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(),
+                            bgColor = Color.Black
+                        ) {
                             Box(modifier = Modifier.padding(16.dp)) {
                                 Column(modifier = Modifier.verticalScroll(scrollState).fillMaxWidth()) {
-                                    Text(
-                                        textToShow,
-                                        color = Color.White,
-                                        fontSize = 12.sp
-                                    )
+                                    SelectionContainer {
+                                        Text(
+                                            textToShow,
+                                            color = Color.White,
+                                            fontSize = 12.sp
+                                        )
+                                    }
                                 }
 
                             }

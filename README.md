@@ -5,3 +5,7 @@ It's built in kotlin using jetpack compose for the graphic library.
 I implemented both the **syntax highlighting** using regex and a map to match keywords from the text and the **clickable location descriptions**
 
 # How to build it:
+Requires openjdk21
+
+
+``gradle clean run``

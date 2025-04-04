@@ -1,10 +1,7 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -18,9 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.text.*
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -29,8 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import jdk.internal.org.jline.utils.AttributedStringBuilder.append
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.File
@@ -71,33 +65,39 @@ fun getColoredText(input: String): AnnotatedString {
 }
 
 @Composable
-fun HighlitableTextArea(text: TextFieldValue, changeText: (TextFieldValue) -> Unit) {
-    RoundedCard(modifier = Modifier, bgColor = Color.White) {
-        BasicTextField(
-            value = text,
-            onValueChange = { it ->
-                val modifiedText = it.text.replace("\t", TAB_SPACE_AMOUNT);
+fun HighlitableTextArea(text: TextFieldValue, changeText: (TextFieldValue) -> Unit,focusRequester: FocusRequester) {
+    var scrollState = rememberScrollState()
+    Row {
 
-                if (modifiedText.length > it.text.length) {
-                    println("Inserted tab")
-                    var newCursor = it.selection.start;
-                    newCursor += 3;
-                    changeText(TextFieldValue(text = modifiedText, selection = TextRange(newCursor)))
-                } else {
-                    changeText(TextFieldValue(text = modifiedText, selection = it.selection))
-                }
-            },
-            textStyle = TextStyle(color = Color.Black, fontSize = 12.sp),
-            modifier = Modifier
-                .fillMaxWidth().height(500.dp).padding(8.dp),
-            visualTransformation = {
-                TransformedText(
-                    getColoredText(text.text).subSequence(0, text.text.length),
-                    OffsetMapping.Identity
-                )
-            },
-            interactionSource = remember { MutableInteractionSource() }, // Ensures interactivity and text selection
-        )
+        RoundedCard(modifier = Modifier.fillMaxWidth(0.98f), bgColor = Color.White) {
+            BasicTextField(
+                value = text,
+                onValueChange = { it ->
+                    val modifiedText = it.text.replace("\t", TAB_SPACE_AMOUNT);
+
+                    if (modifiedText.length > it.text.length) {
+                        println("Inserted tab")
+                        var newCursor = it.selection.start;
+                        newCursor += 3;
+                        changeText(TextFieldValue(text = modifiedText, selection = TextRange(newCursor)))
+                    } else {
+                        changeText(TextFieldValue(text = modifiedText, selection = it.selection))
+                    }
+                },
+                textStyle = TextStyle(color = Color.Black, fontSize = 12.sp),
+                modifier = Modifier
+                    .fillMaxWidth().fillMaxHeight().padding(8.dp).verticalScroll(scrollState).focusRequester(focusRequester),
+                visualTransformation = {
+                    TransformedText(
+                        getColoredText(text.text).subSequence(0, text.text.length),
+                        OffsetMapping.Identity
+                    )
+                },
+                interactionSource = remember { MutableInteractionSource() }, // Ensures interactivity and text selection
+            )
+
+        }
+        StyledScrollbar(scrollState)
     }
 }
 
@@ -144,6 +144,11 @@ fun RoundedCard(modifier: Modifier, bgColor: Color, inner: @Composable() () -> U
     ) { inner() }
 }
 
+fun convertCursorPosition(text:String,lineNr:Int,colNr:Int):Int {
+    val lines = text.split("\n");
+    return lines.subList(0,lineNr-1).joinToString("\n").length+colNr;
+}
+
 @Composable
 @Preview
 fun App() {
@@ -165,16 +170,15 @@ fun App() {
                 )
             )
         }
-        val outputText = rememberSaveable { mutableStateOf("") }
         val annotatedTextBuilder = remember { AnnotatedString.Builder() }
         var textToShow by remember { mutableStateOf(annotatedTextBuilder.toAnnotatedString()) }
         val exitCode: MutableState<Int?> = rememberSaveable { mutableStateOf(null) }
         val isScriptRunning = rememberSaveable { mutableStateOf(false) }
         val scrollState = rememberScrollState()
         val coroutineScope = rememberCoroutineScope()
+        val focusRequester=remember{FocusRequester()}
         LaunchedEffect(textToShow) {
             coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) }
-
         }
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,48 +186,11 @@ fun App() {
                     runScript(
                         scriptText.value.text,
                         { output ->
-                            annotatedTextBuilder.withStyle(SpanStyle(color = Color.Gray)) { append(output + "\n") }
+                            annotatedTextBuilder.withStyle(SpanStyle(color = Color.White)) { append(output + "\n") }
                             textToShow = annotatedTextBuilder.toAnnotatedString()
                         },
                         { output ->
-                            val regex = """(.*?)([a-zA-Z0-9_-]+\.kts):(\d+):(\d+):(.+)""".toRegex()
-
-                            val matchResult = regex.find(output)
-                            if (matchResult != null) {
-                                println("Not null")
-                                matchResult?.let {
-                                    val beforeText = it.groupValues[1]  // "some other text before "
-                                    val filename = it.groupValues[2]   // "foo.kts"
-                                    val number1 = it.groupValues[3]    // "10"
-                                    val number2 = it.groupValues[4]    // "50"
-                                    val otherText = it.groupValues[5]  // "some extra information here"
-
-                                    println("Before Text: $beforeText")
-                                    println("Filename: $filename")
-                                    println("Number1: $number1")
-                                    println("Number2: $number2")
-                                    println("Other Text: $otherText")
-                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(beforeText) }
-                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(filename+":") }
-                                    annotatedTextBuilder.pushLink(LinkAnnotation.Clickable("clickable line") {
-                                        //TODO move the cursor
-                                        println("Clicked on $number1:$number2")
-                                    });
-
-                                    annotatedTextBuilder.withStyle(
-                                        SpanStyle(
-                                            color = Color.Red,
-                                            textDecoration = TextDecoration.Underline
-                                        )
-                                    ) { append("$number1:$number2: ") };
-                                    annotatedTextBuilder.pop()
-                                    annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(otherText) }
-                                }
-                            } else {
-                                annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(output + "\n") }
-                            }
-
-                            textToShow = annotatedTextBuilder.toAnnotatedString()
+                            textToShow = annotateErrors(output, annotatedTextBuilder, scriptText, focusRequester)
                         },
                         { running, code -> isScriptRunning.value = running;exitCode.value = code },
                     )
@@ -241,51 +208,108 @@ fun App() {
                         Text("Run Script", fontSize = 12.sp)
                     }
                 }
-//                Text("Is script running: ${isScriptRunning.value}")
                 Text("Return Code: ${exitCode.value}")
             }
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxWidth(0.5f)) {
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        HighlitableTextArea(scriptText.value, changeText = { it -> scriptText.value = it });
+                        HighlitableTextArea(scriptText.value, changeText = { it -> scriptText.value = it },focusRequester);
                     }
                 }
                 Column(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-
-                        RoundedCard(
-                            modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(),
-                            bgColor = Color.Black
-                        ) {
-                            Box(modifier = Modifier.padding(16.dp)) {
-                                Column(modifier = Modifier.verticalScroll(scrollState).fillMaxWidth()) {
-                                    SelectionContainer {
-                                        Text(
-                                            textToShow,
-                                            color = Color.White,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-
-                            }
-                        }
-                        VerticalScrollbar(
-                            adapter = rememberScrollbarAdapter(scrollState),
-                            modifier = Modifier.fillMaxHeight(), style = ScrollbarStyle(
-                                minimalHeight = 16.dp,
-                                thickness = 6.dp,
-                                shape = RoundedCornerShape(3.dp),
-                                hoverDurationMillis = 300,
-                                unhoverColor = Color(0x80007AFF), // Semi-transparent Apple blue
-                                hoverColor = Color(0xFF007AFF)  // Solid Apple blue
-                            )
-                        )
-                    }
+                    OutputPane(scrollState, textToShow)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun OutputPane(
+    scrollState: ScrollState,
+    textToShow: AnnotatedString
+) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+
+        RoundedCard(
+            modifier = Modifier.fillMaxWidth(0.98f).fillMaxHeight(),
+            bgColor = Color.Black
+        ) {
+            Box(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.verticalScroll(scrollState).fillMaxWidth()) {
+                    SelectionContainer {
+                        Text(
+                            textToShow,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+
+                        )
+                    }
+                }
+
+            }
+        }
+        StyledScrollbar(scrollState)
+    }
+}
+
+@Composable
+private fun StyledScrollbar(scrollState: ScrollState) {
+    VerticalScrollbar(
+        adapter = rememberScrollbarAdapter(scrollState),
+        modifier = Modifier.fillMaxHeight(), style = ScrollbarStyle(
+            minimalHeight = 16.dp,
+            thickness = 6.dp,
+            shape = RoundedCornerShape(3.dp),
+            hoverDurationMillis = 300,
+            unhoverColor = Color(0x80007AFF), // Semi-transparent Apple blue
+            hoverColor = Color(0xFF007AFF)  // Solid Apple blue
+        )
+    )
+}
+
+private fun annotateErrors(
+    output: String,
+    annotatedTextBuilder: AnnotatedString.Builder,
+    scriptText: MutableState<TextFieldValue>,
+    focusRequester: FocusRequester,
+
+) :AnnotatedString{
+    val regex = """(.*?)([a-zA-Z0-9_-]+\.kts):(\d+):(\d+):(.+)""".toRegex()
+
+    val matchResult = regex.find(output)
+    if (matchResult != null) {
+        println("Not null")
+        matchResult?.let {
+            val beforeText = it.groupValues[1]  // "some other text before "
+            val filename = it.groupValues[2]   // "foo.kts"
+            val lineNr = it.groupValues[3]    // "10"
+            val colNr = it.groupValues[4]    // "50"
+            val otherText = it.groupValues[5]  // "some extra information here"
+            println(otherText)
+            annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(beforeText) }
+            annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(filename + ":") }
+            annotatedTextBuilder.pushLink(LinkAnnotation.Clickable("clickable line") {
+                val newCursor = convertCursorPosition(scriptText.value.text, lineNr.toInt(), colNr.toInt())
+                scriptText.value = TextFieldValue(scriptText.value.text, TextRange(newCursor))
+                focusRequester.requestFocus()
+            });
+
+            annotatedTextBuilder.withStyle(
+                SpanStyle(
+                    color = Color.Red,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) { append("$lineNr:$colNr: ") };
+            annotatedTextBuilder.pop()
+            annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(otherText+"\n") }
+        }
+    } else {
+        annotatedTextBuilder.withStyle(SpanStyle(color = Color.Red)) { append(output + "\n") }
+    }
+
+    return annotatedTextBuilder.toAnnotatedString()
 }
 
 fun main() = application {

@@ -36,9 +36,15 @@ val keywords: Map<String, Color> =
         "val" to Color.Blue,
         "var" to Color.Blue,
         "if" to Color.Blue,
+        "else" to Color.Blue,
+        "this" to Color.Blue,
+        "return" to Color.Blue,
         "for" to Color.Blue,
         "fun" to Color.Blue,
-        "println" to Color.Blue
+        "while" to Color.Blue,
+        "break" to Color.Blue,
+        "class" to Color.Blue,
+        "println" to Color.Red
     );
 
 fun getColoredText(input: String): AnnotatedString {
